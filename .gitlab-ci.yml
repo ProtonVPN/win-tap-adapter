@@ -1,0 +1,39 @@
+variables:
+  PUBLIC_REPO_URL: git@github.com:ProtonVPN/win-tap-adapter.git
+
+stages:
+  - build
+  - mirror
+
+build:
+  stage: build
+  tags:
+    - windows
+  script:
+    - git clone https://github.com/OpenVPN/tap-windows6.git
+    - cd tap-windows6
+    - (Get-Content version.m4) -replace "(\[PRODUCT_TAP_WIN_COMPONENT_ID]\, \[)([a-z0-9]+)(\])", '${1}tapprotonvpn${3}' | Out-File version.m4 -Encoding "UTF8"
+    - (Get-Content version.m4) -replace "(\[PRODUCT_TAP_WIN_PROVIDER]\, \[)([a-zA-Z0-9- ]+)(\])", '${1}TAP-ProtonVPN Windows Provider V9${3}' | Out-File version.m4 -Encoding "UTF8"
+    - (Get-Content version.m4) -replace "(\[PRODUCT_TAP_WIN_DEVICE_DESCRIPTION]\, \[)([a-zA-Z0-9- ]+)(\])", '${1}TAP-ProtonVPN Windows Adapter V9${3}' | Out-File version.m4 -Encoding "UTF8"
+    - python buildtap.py --sdk=wdk -b
+  artifacts:
+    paths:
+      - tap-windows6/dist/amd64
+      - tap-windows6/dist/i386
+    expire_in: 100 weeks
+
+mirror:
+  stage: mirror
+  tags:
+    - windows
+  only:
+    refs:
+      - tags
+      - master
+  script:
+    - powershell -File prepare-ssh.ps1
+    - git clone "$CI_REPOSITORY_URL" --branch master _APP_CLONE;
+    - cd _APP_CLONE
+    - git remote add public $PUBLIC_REPO_URL
+    - git push public master
+    - git push public "$(git describe --abbrev=0)"
